@@ -4,6 +4,8 @@
 
 原始项目需求的完整中文翻译见 [需求说明](docs/需求说明.zh-CN.md)。
 
+想下载本地英汉字典与 C1/C2 资料，请先看[本地词典下载指南](docs/本地词典下载指南.zh-CN.md)。新增的 `download-dictionaries.command` 可以在 Mac 上下载固定版本资料，并生成带来源说明的双语 C1/C2 学习表；目前尚未自动接入网站分析流程。
+
 ## 词汇等级代表什么
 
 本项目使用 Open Language Profiles 发布的 **Octanove Vocabulary Profile C1/C2 v1.0** 作为开放词汇等级参考。原始数据有 2,136 行，去除完全重复记录后有 2,108 条，涉及 1,955 个不同词头。该数据以 CC BY-SA 4.0 授权，固定于提交 `d4e45b75b38f27b30dfc5c44d8c571aec7e7092f`。出处、校验值及授权说明见 [data/SOURCES.md](data/SOURCES.md)。
