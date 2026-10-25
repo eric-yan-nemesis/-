@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from lemminflect import getAllLemmas
+from app.personal_dictionary import annotation_fields
 
 AI_LIMIT = 16000
 _slots = asyncio.Semaphore(2)
@@ -60,6 +61,7 @@ async def enrich(result: dict, include_estimates: bool) -> dict:
         '{quote:exact substring from text, lemma:string, level:C1 or C2, pos:string, chinese:string, definition:string, example:string}. '
         'These are uncertain model estimates, never verified dictionary facts. Do not guess that common basic words are advanced. '
         'Keep each field under 500 characters. Provide English definitions/examples and Chinese meanings.'
+        ' Your definitions and examples are AI annotations only; they never replace the supplied Wordset source text.'
     )
     try:
         async with _slots:
@@ -105,8 +107,11 @@ def apply_annotations(result: dict, data: dict, include_estimates: bool) -> dict
             item = deepcopy(original)
             item.update(id=f'v{len(groups) + 1}', count=0, forms=[])
             if annotation:
-                for key in ('chinese', 'definition', 'example', 'pos'):
+                for key in ('chinese', 'pos'):
                     item[key] = _short(annotation[key], 100 if key == 'pos' else 1200)
+                item['ai_definition'] = _short(annotation['definition'])
+                item['ai_example'] = _short(annotation['example'])
+                item['chinese_source'] = 'AI 辅助释义·待核'
                 aliases = {'n': 'noun', 'v': 'verb', 'adj': 'adjective', 'adv': 'adverb'}
                 pos = item['pos'].lower().rstrip('.')
                 pos = aliases.get(pos, pos)
@@ -114,6 +119,7 @@ def apply_annotations(result: dict, data: dict, include_estimates: bool) -> dict
                 if matching:
                     levels = sorted({x['level'] for x in matching})
                     item.update(level=levels[0], level_candidates=levels, source_candidates=matching)
+                    item.update(annotation_fields(item['lemma'], matching))
                 elif original.get('source_candidates'):
                     item['status'] = 'estimate'
                     item['notes'] += ' AI 判断的词性未找到对应来源记录，等级仅作候选。'
@@ -155,7 +161,11 @@ def apply_annotations(result: dict, data: dict, include_estimates: bool) -> dict
             if not spans:
                 continue
             item = {k: _short(estimate[k], 200 if k == 'lemma' else 100 if k == 'pos' else 1200)
-                    for k in ('lemma', 'pos', 'chinese', 'definition', 'example')}
+                    for k in ('lemma', 'pos', 'chinese')}
+            item.update(definition='', example='', dictionary_senses=[],
+                        ai_definition=_short(estimate['definition']), ai_example=_short(estimate['example']),
+                        definition_source=None, example_source=None, annotation_source='ai',
+                        chinese_source='AI 辅助释义·待核')
             item.update(id=f'v{len(result["items"]) + 1}', level=estimate['level'], status='estimate',
                         source=None, notes='仅为模型估计，缺少词表支持；等级及语境含义均未核实。',
                         context_verified=False, count=len(spans), forms=[quote])

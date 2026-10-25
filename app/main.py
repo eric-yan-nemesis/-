@@ -5,15 +5,16 @@ import shutil
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from starlette.concurrency import run_in_threadpool
 
 from app import ai
 from app.vocabulary import analyze_text, lexicon
+from app.personal_dictionary import DICTIONARY_PATH, dictionary_info, lookup_entry
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BODY = 11 * 1024 * 1024
@@ -83,7 +84,7 @@ class AnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     text: str = Field(min_length=1, max_length=100000)
     use_ai: bool = False
-    include_estimates: bool = True
+    include_estimates: bool = False
 
     @model_validator(mode='after')
     def nonblank(self):
@@ -91,6 +92,23 @@ class AnalyzeRequest(BaseModel):
             raise ValueError('请输入英文文本。')
         if not valid_xml_string(self.text):
             raise ValueError('文本包含不支持的控制字符。')
+        return self
+
+
+class DictionarySense(BaseModel):
+    id: str = Field(max_length=200)
+    definition: str = Field(max_length=8000)
+    pos: str = Field(max_length=100)
+    examples: list[str] = Field(default_factory=list, max_length=100)
+    source: Literal['wordset'] = 'wordset'
+    wordset_word: str = Field(max_length=200)
+
+    @model_validator(mode='after')
+    def valid_strings(self):
+        if not all(valid_xml_string(s) for s in [self.id, self.definition, self.pos, self.wordset_word, *self.examples]):
+            raise ValueError('词典字段包含不支持的字符。')
+        if any(len(example) > 8000 for example in self.examples):
+            raise ValueError('词典用例过长。')
         return self
 
 
@@ -110,8 +128,16 @@ class VocabularyItem(BaseModel):
     context_verified: bool = False
     level_candidates: list[str] = Field(default_factory=list)
     source_candidates: list[dict] = Field(default_factory=list, max_length=100)
+    dictionary_senses: list[DictionarySense] = Field(default_factory=list, max_length=150)
+    definition_source: dict | None = None
+    example_source: dict | None = None
+    annotation_source: Literal['wordset', 'ai', 'none'] = 'none'
+    chinese_source: str = Field(default='', max_length=200)
+    ai_definition: str = Field(default='', max_length=2000)
+    ai_example: str = Field(default='', max_length=2000)
+    selected_sense_id: str | None = Field(default=None, max_length=200)
 
-    @field_validator('lemma', 'pos', 'chinese', 'definition', 'example', 'notes')
+    @field_validator('lemma', 'pos', 'chinese', 'definition', 'example', 'notes', 'ai_definition', 'ai_example', 'chinese_source')
     @classmethod
     def valid_xml_text(cls, value):
         if not valid_xml_string(value):
@@ -160,7 +186,28 @@ class ExportRequest(BaseModel):
 def health():
     _, entries = lexicon()
     return {'status': 'ok', 'ai_configured': ai.configured(),
-            'ocr_available': bool(shutil.which('tesseract')), 'reference_entries': len(entries)}
+            'ocr_available': bool(shutil.which('tesseract')), 'reference_entries': len(entries),
+            'dictionary': dictionary_info()}
+
+
+@app.get('/api/dictionary')
+def dictionary():
+    return dictionary_info()
+
+
+@app.get('/api/dictionary/lookup')
+def dictionary_lookup(word: str = Query(min_length=1, max_length=200)):
+    entry = lookup_entry(word)
+    if entry is None:
+        raise HTTPException(status_code=404, detail='当前 C1/C2 词典未收录此词头；这不代表该词低于 C1。请尝试词条原形。')
+    return entry
+
+
+@app.get('/api/dictionary/download')
+def dictionary_download():
+    # Validate the bundled asset before returning the exact offline dictionary.
+    dictionary_info()
+    return FileResponse(DICTIONARY_PATH, media_type='application/json', filename='LexiScope-Octanove-Wordset.json')
 
 
 @app.post('/api/analyze')

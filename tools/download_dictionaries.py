@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Download pinned reference files and build a private local bilingual study CSV."""
+"""Optional legacy ECDICT study-table helper; not the active personal dictionary.
+
+The website uses bundled Octanove × Wordset data. Run build_personal_dictionary.py
+to rebuild that dictionary. This separate helper remains available only for
+users who explicitly want the older, unintegrated ECDICT bilingual study CSV.
+"""
 import argparse
 import csv
 import hashlib
@@ -172,13 +177,15 @@ def build_study_csv(output):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='下载开放词库并生成本机 C1/C2 英汉学习表。')
+    parser = argparse.ArgumentParser(description='可选旧版 ECDICT 学习表工具；不会替换网站使用的 Octanove × Wordset 个人词典。')
     parser.add_argument('--output', type=Path, default=ROOT / 'dictionaries-local', help='本地输出目录')
     parser.add_argument('--ecdict-file', type=Path, help='复用已下载且校验匹配的 ECDICT CSV')
     args = parser.parse_args()
     output = args.output.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
-    print('预计首次下载约 63 MiB；不需要 API 密钥。', flush=True)
+    print('这是可选旧版 ECDICT 学习表工具，生成结果尚未接入网站。', flush=True)
+    print('网站已内置 Octanove × Wordset 个人词典；仅重建它时请运行 tools/build_personal_dictionary.py。', flush=True)
+    print('本旧版工具预计首次下载约 63 MiB；不需要 API 密钥。', flush=True)
     for name, url, digest in SOURCES:
         local = args.ecdict_file if name == 'ecdict/ecdict.csv' else None
         bundled = ROOT / 'data' / Path(name).name

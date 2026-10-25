@@ -86,6 +86,31 @@ function contextUncertain(item) {
   return Boolean(state.analysis && state.analysis.occurrences.some((occurrence) => occurrence.item_id === item.id && occurrence.uncertain));
 }
 
+function dictionarySenses(senses = []) {
+  const container = element("div", "dictionary-senses");
+  if (!senses.length) container.append(element("p", "item-notes", "Wordset 暂无匹配义项或用例。"));
+  senses.forEach((sense, index) => {
+    const details = element("details", "dictionary-sense");
+    details.open = index === 0;
+    details.append(element("summary", "", `${sense.pos || "词性待核"} · ${sense.definition || "暂无定义"}`));
+    const examples = Array.isArray(sense.examples) ? sense.examples : [];
+    if (examples.length) {
+      const list = element("ul", "dictionary-examples");
+      examples.forEach((example) => list.append(element("li", "", example)));
+      details.append(list);
+    } else details.append(element("p", "item-notes", "Wordset 暂无用例"));
+    container.append(details);
+  });
+  return container;
+}
+
+function aiAssistance(item) {
+  const container = element("div", "ai-assistance");
+  if (item.ai_definition) container.append(element("p", "", `AI 辅助定义 · 待核：${item.ai_definition}`));
+  if (item.ai_example) container.append(element("p", "", `AI 生成例句 · 待核：${item.ai_example}`));
+  return container;
+}
+
 function selectWord(id, scroll = false) {
   if (!state.analysis) return;
   const item = state.analysis.items.find((entry) => entry.id === id);
@@ -100,7 +125,12 @@ function selectWord(id, scroll = false) {
   const card = $("selected-word");
   const heading = element("div", "selected-word-heading");
   heading.append(element("strong", "", item.lemma), levelBadge(item), element("span", "status-badge", item.status === "reference" ? "有来源支持" : "等级估计"));
-  const details = [heading, element("p", "", `${item.pos || ""} · ${item.chinese || "暂无中文释义"}`), element("p", "selected-definition", item.definition || "")];
+  const details = [heading, element("p", "", `${item.pos || ""} · ${item.chinese || "暂无中文释义"}`), element("p", "item-notes", `中文来源：${item.chinese_source || "中文学习注释／AI 辅助，非两份原词典内容"}`)];
+  if (Array.isArray(item.dictionary_senses)) {
+    details.push(dictionarySenses(item.dictionary_senses), aiAssistance(item));
+    const usageSource = referenceLink(item.example_source || item.definition_source, "英文义项与用例：Wordset Dictionary ↗");
+    if (usageSource) details.push(usageSource);
+  } else details.push(element("p", "selected-definition", item.definition || ""));
   if (contextUncertain(item)) details.push(element("p", "item-notes", "语境待核：参考词表中的等级，不代表当前词义已确认。"));
   if (item.notes) details.push(element("p", "item-notes", item.notes));
   const link = referenceLink(item.source);
@@ -158,9 +188,18 @@ function renderTable() {
     if (source) levelCell.append(source);
     if (contextUncertain(item)) levelCell.append(element("span", "status-badge", "语境待核"));
     const definitionCell = element("td");
-    definitionCell.append(element("p", "chinese-meaning", item.chinese || "—"), element("p", "english-definition", item.definition || "—"));
+    definitionCell.append(element("p", "chinese-meaning", item.chinese || "—"), element("p", "item-notes", item.chinese_source || "中文学习注释／AI 辅助"), element("p", "english-definition", item.definition || "Wordset 暂无匹配定义"));
     const exampleCell = element("td");
-    exampleCell.append(element("p", "example-sentence", item.example || "—"));
+    exampleCell.append(element("p", "example-sentence", item.example || "Wordset 暂无用例"));
+    const exampleSource = referenceLink(item.example_source || item.definition_source, "Wordset 义项／用例 ↗");
+    if (exampleSource) exampleCell.append(exampleSource);
+    if (Array.isArray(item.dictionary_senses) && item.dictionary_senses.length) {
+      const more = element("details", "table-senses");
+      const count = item.dictionary_senses.reduce((sum, sense) => sum + (sense.examples || []).length, 0);
+      more.append(element("summary", "", `${item.dictionary_senses.length} 个义项 · ${count} 条用例`), dictionarySenses(item.dictionary_senses));
+      exampleCell.append(more);
+    }
+    if (item.ai_example || item.ai_definition) exampleCell.append(aiAssistance(item));
     if (item.notes) exampleCell.append(element("p", "item-notes", item.notes));
     row.append(wordCell, levelCell, definitionCell, exampleCell, element("td", "word-count-cell", item.count || 0));
     return row;
@@ -297,4 +336,41 @@ async function initialize() {
   }
 }
 
+async function loadPersonalDictionary() {
+  try {
+    const response = await request("/api/dictionary");
+    const data = await response.json();
+    const labels = {
+      headwords: "词头", unique_headwords: "词头", entries: "词条", total_entries: "词条",
+      matched_wordset_headwords: "匹配 Wordset 的词头", wordset_matched_headwords: "匹配 Wordset 的词头",
+      headwords_with_examples: "有用例的词头", words_with_examples: "有用例的词头",
+      senses: "英文义项", wordset_senses: "英文义项", examples: "原始用例", example_count: "原始用例"
+    };
+    const stats = Object.entries(data.coverage || {}).filter(([key, value]) => labels[key] && typeof value === "number");
+    $("dictionary-coverage").replaceChildren(...stats.map(([key, value]) => element("span", "coverage-stat", `${labels[key]}：${value.toLocaleString()}`)));
+    if (!stats.length) $("dictionary-coverage").textContent = data.name || "本地组合词典已就绪";
+    const links = Object.values(data.sources || {}).map((source) => referenceLink(source)).filter(Boolean);
+    $("dictionary-sources").replaceChildren(...links);
+  } catch (_) { $("dictionary-coverage").textContent = "词典尚未连接，请确认后端与组合词典数据已安装。"; }
+}
+
+$("dictionary-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const word = $("dictionary-query").value.trim();
+  if (!word) return;
+  $("dictionary-search").disabled = true;
+  $("dictionary-message").textContent = "正在查询…";
+  $("dictionary-result").hidden = true;
+  try {
+    const response = await request(`/api/dictionary/lookup?word=${encodeURIComponent(word)}`);
+    const entry = await response.json();
+    const result = $("dictionary-result");
+    result.replaceChildren(element("h3", "", entry.word), element("p", "", (entry.cefr || []).map((record) => `${record.pos || "词性待核"} · ${record.level}${record.notes ? ` · ${record.notes}` : ""}`).join("；")), element("p", "item-notes", "等级：Octanove；英文定义和用例：Wordset。义项与等级对应仍需核对。"), dictionarySenses(entry.senses || []));
+    result.hidden = false;
+    $("dictionary-message").textContent = "";
+  } catch (error) { $("dictionary-message").textContent = error.message || "词典中没有找到此词条。"; }
+  finally { $("dictionary-search").disabled = false; }
+});
+
 initialize();
+loadPersonalDictionary();

@@ -6,6 +6,7 @@ import csv
 import html
 import io
 import re
+from pathlib import Path
 
 import fitz
 from docx import Document
@@ -68,13 +69,13 @@ def _basis(item: dict) -> str:
     else:
         label = "估计，未经来源验证"
     known_profile = "Octanove" in str(source.get("name", "")) or "openlanguageprofiles/olp-en-cefrj" in str(source.get("url", ""))
-    attribution = source.get("attribution") or ("Octanove Labs / Open Language Profiles" if known_profile else None)
+    attribution = source.get("attribution") or source.get("creator") or ("Octanove Labs / Open Language Profiles" if known_profile else None)
     license_name = source.get("license") or ("CC BY-SA 4.0" if known_profile else None)
     license_url = source.get("license_url") or (
         "https://creativecommons.org/licenses/by-sa/4.0/" if license_name == "CC BY-SA 4.0" else None
     )
     modifications = source.get("modifications") or (
-        "变更：词形匹配、大小写规范化及候选去重；中文释义、英文定义和例句由作者原创或 AI 生成。"
+        "变更：词形匹配、大小写规范化及候选去重；词典定义及用例保留各自来源，中文学习注释与 AI 辅助另行标明。"
         "派生词汇数据按 CC BY-SA 4.0 分享。"
         if known_profile else None
     )
@@ -82,7 +83,51 @@ def _basis(item: dict) -> str:
         source.get("name"), source.get("url"), attribution, license_name, license_url,
         modifications, item.get("notes"),
     ) if value)
+    wordset = item.get("example_source") or item.get("definition_source")
+    if wordset or item.get("dictionary_senses"):
+        wordset = wordset or {}
+        detail += "\n" + "\n".join(str(value) for value in (
+            "英文定义与用例来源：" + wordset.get("name", "Wordset Dictionary"),
+            wordset.get("url", "https://github.com/wordset/wordset-dictionary"),
+            wordset.get("creator", "Wordset contributors; derived from Princeton WordNet 3.0"),
+            wordset.get("license", "CC BY-SA 4.0"),
+            wordset.get("license_url", "https://creativecommons.org/licenses/by-sa/4.0/"),
+            "保留 Princeton WordNet 3.0 版权及许可：https://wordnet.princeton.edu/license-and-commercial-use",
+            "变更：按词头/词性筛选与组合；义项和 CEFR 对应未经核实。用例包含短语，不保证都是完整句子。",
+        ) if value)
     return label + ("\n" + detail if detail else "")
+
+
+def _definitions(item: dict) -> str:
+    if "dictionary_senses" not in item or (not item.get("dictionary_senses") and not item.get("definition_source") and item.get("definition")):
+        return str(item.get("definition", ""))
+    parts = [f"[{sense.get('pos', '')}] {sense.get('definition', '')}" for sense in item.get("dictionary_senses", [])]
+    if not parts:
+        parts.append("Wordset 暂无匹配义项")
+    if item.get("ai_definition"):
+        parts.append("AI 辅助定义（待核）：" + str(item["ai_definition"]))
+    return "\n".join(parts)
+
+
+def _examples(item: dict) -> str:
+    if "dictionary_senses" not in item or (not item.get("dictionary_senses") and not item.get("example_source") and item.get("example")):
+        return str(item.get("example", ""))
+    parts = []
+    for sense in item.get("dictionary_senses", []):
+        for example in sense.get("examples", []):
+            parts.append(f"Wordset [{sense.get('pos', '')}]：{example}")
+    if not parts:
+        parts.append("Wordset 暂无用例")
+    if item.get("ai_example"):
+        parts.append("AI 生成例句（待核）：" + str(item["ai_example"]))
+    return "\n".join(parts)
+
+
+def _dictionary_license(analysis: dict) -> str:
+    if not any("dictionary_senses" in item for item in analysis.get("items", [])):
+        return ""
+    # Read the fixed bundled notice only; never load a client-supplied path.
+    return (Path(__file__).resolve().parents[1] / "data" / "wordset" / "LICENSE").read_text(encoding="utf-8")
 
 
 def _level_label(item: dict) -> str:
@@ -127,13 +172,16 @@ def build_docx(analysis: dict) -> bytes:
         values = [
             f'{item.get("lemma", "")}\n出现 {item.get("count", 0)} 次',
             f'{_level_label(item)} / {item.get("pos", "")}',
-            item.get("chinese", ""), item.get("definition", ""),
-            item.get("example", ""), _basis(item),
+            item.get("chinese", ""), _definitions(item),
+            _examples(item), _basis(item),
         ]
         for cell, value in zip(table.add_row().cells, values):
             cell.text = str(value)
     for warning in analysis.get("warnings", []):
         document.add_paragraph(str(warning))
+    if notice := _dictionary_license(analysis):
+        document.add_heading("词典资料许可与原始声明", 1)
+        document.add_paragraph(notice)
     output = io.BytesIO()
     document.save(output)
     return output.getvalue()
@@ -157,18 +205,20 @@ def build_pdf(analysis: dict) -> bytes:
             f'<h3>{escape(item.get("lemma", ""))} · {escape(_level_label(item))} '
             f'· {escape(item.get("pos", ""))} · {escape(item.get("count", 0))} 次</h3>'
             f'<p><b>中文：</b>{escape(item.get("chinese", ""))}</p>'
-            f'<p><b>English：</b>{escape(item.get("definition", ""))}</p>'
-            f'<p><b>例句：</b>{escape(item.get("example", ""))}</p>'
+            f'<p><b>English：</b>{escape(_definitions(item)).replace(chr(10), "<br>")}</p>'
+            f'<p><b>例句／短语用例：</b>{escape(_examples(item)).replace(chr(10), "<br>")}</p>'
             f'<p class="source">{escape(_basis(item)).replace(chr(10), "<br>")}</p>'
             '</div>'
         )
     warnings = "".join(f'<p class="source">{escape(warning)}</p>' for warning in analysis.get("warnings", []))
+    license_notice = _dictionary_license(analysis)
+    license_markup = '<h2>词典资料许可与原始声明</h2><p class="source">' + escape(license_notice).replace(chr(10), "<br>") + '</p>' if license_notice else ''
     markup = (
         '<!DOCTYPE html><html><body><h1>词境 · LexiScope</h1>'
         f'<p class="source">{escape(FORMAT_NOTICE)}</p>'
         '<p>C1：浅黄色 · C2：浅绿色。来源标签不等于当前语境已确认。</p>'
         '<h2>标注正文</h2>' + "".join(paragraphs)
-        + '<h2>词汇表</h2>' + "".join(cards) + warnings + '</body></html>'
+        + '<h2>词汇表</h2>' + "".join(cards) + warnings + license_markup + '</body></html>'
     )
     css = """
     body { font-family: sans-serif; font-size: 10pt; color: #203633; }
@@ -209,11 +259,14 @@ def _csv_safe(value) -> str:
 def build_csv(analysis: dict) -> bytes:
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow(["词汇", "CEFR", "词性", "中文释义", "英文定义", "例句", "可靠性和来源", "出现次数", "原文词形"])
+    license_notice = _dictionary_license(analysis)
+    headers = ["词汇", "CEFR", "词性", "中文释义", "英文定义", "例句", "可靠性和来源", "出现次数", "原文词形"]
+    writer.writerow(headers + (["词典资料许可与原始声明"] if license_notice else []))
     for item in analysis.get("items", []):
-        writer.writerow([
+        row = [
             _csv_safe(item.get("lemma")), _csv_safe(_level_label(item)), _csv_safe(item.get("pos")),
-            _csv_safe(item.get("chinese")), _csv_safe(item.get("definition")), _csv_safe(item.get("example")),
+            _csv_safe(item.get("chinese")), _csv_safe(_definitions(item)), _csv_safe(_examples(item)),
             _csv_safe(_basis(item)), _csv_safe(item.get("count", 0)), _csv_safe(", ".join(item.get("forms", []))),
-        ])
+        ]
+        writer.writerow(row + ([_csv_safe(license_notice)] if license_notice else []))
     return output.getvalue().encode("utf-8-sig")

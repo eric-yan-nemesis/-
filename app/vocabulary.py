@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from lemminflect import getAllInflections
+from app.personal_dictionary import annotation_fields, spelling_variants
 
 DATA = Path(__file__).resolve().parents[1] / 'data'
 SOURCE_URL = 'https://github.com/openlanguageprofiles/olp-en-cefrj/blob/d4e45b75b38f27b30dfc5c44d8c571aec7e7092f/octanove-vocabulary-profile-c1c2-1.0.csv'
@@ -19,8 +20,9 @@ EXPECTED_SHA256 = '18c33a407f2f89f7b8de9671c6d45fe3ea0bce45e7d2d7dcaab48d73e0f7b
 TOKEN = re.compile(r"[A-Za-z]+(?:['’\-][A-Za-z]+)*")
 POS = {'noun': 'NOUN', 'verb': 'VERB', 'adjective': 'ADJ', 'adverb': 'ADV'}
 
-# Original annotations, not copied dictionary definitions. The level comes ONLY
-# from the bundled source. Multiple senses require contextual review.
+# Original Chinese teaching notes. English definitions/examples below are legacy
+# notes only: analysis uses the pinned Wordset data, never these authored examples.
+# The level comes ONLY from the bundled Octanove source.
 ANNOTATIONS = {
  'complexity': ('复杂性；复杂程度', 'The state of having many connected parts.', 'The complexity of the problem surprised us.'),
  'concur': ('同意；意见一致', 'To express the same opinion as someone else.', 'The two reviewers concurred with the findings.'),
@@ -59,19 +61,21 @@ def lexicon():
             seen.add(key)
             entry = {'lemma': lemma, 'pos': pos or 'unknown', 'level': level, 'notes': notes}
             entries.append(entry)
-            forms = {lemma.lower()}
+            variants = spelling_variants(lemma)
+            forms = {lemma.lower(), *variants}
             # Restrict morphology by source POS; derivations are not inflections.
             if pos in POS:
-                parts = lemma.split(' ')
-                # Inflect the lexical verb in a phrasal verb, or the final noun
-                # in an ordinary noun phrase. Preserve the other words exactly.
-                head = 0 if pos == 'verb' else len(parts) - 1
-                if len(parts) == 1 or pos in ('verb', 'noun'):
-                    for inflections in getAllInflections(parts[head], upos=POS[pos]).values():
-                        for form in inflections:
-                            variant = parts.copy()
-                            variant[head] = form.lower()
-                            forms.add(' '.join(variant).lower())
+                for spelling in variants:
+                    parts = spelling.split(' ')
+                    # Inflect the verb in a phrasal verb, or final noun in a
+                    # noun phrase, preserving each explicit source spelling.
+                    head = 0 if pos == 'verb' else len(parts) - 1
+                    if len(parts) == 1 or pos in ('verb', 'noun'):
+                        for inflections in getAllInflections(parts[head], upos=POS[pos]).values():
+                            for form in inflections:
+                                variant = parts.copy()
+                                variant[head] = form.lower()
+                                forms.add(' '.join(variant).lower())
             for form in forms:
                 by_form[form].append(entry)
     return dict(by_form), entries
@@ -109,7 +113,7 @@ def analyze_text(text: str) -> dict:
             lemma = chosen['lemma']
             group_key = lemma.lower()
             if group_key not in groups:
-                chinese, definition, example = ANNOTATIONS.get(lemma.lower(), (
+                chinese, _, _ = ANNOTATIONS.get(lemma.lower(), (
                     '需结合上下文确认中文释义（可启用 AI）',
                     'No offline sense definition is available; contextual review is required.',
                     sentence_at(text, tokens[index].start(), span_end)))
@@ -121,7 +125,8 @@ def analyze_text(text: str) -> dict:
                 groups[group_key] = {
                     'id': f'v{len(groups) + 1}', 'lemma': lemma,
                     'level': chosen['level'], 'pos': ' / '.join(sorted({x['pos'] for x in candidates})),
-                    'chinese': chinese, 'definition': definition, 'example': example,
+                    'chinese': chinese, **annotation_fields(lemma, candidates),
+                    'chinese_source': '中文学习注释（非 Octanove / Wordset 原文）',
                     'status': 'reference', 'source': dict(SOURCE), 'notes': notes,
                     'count': 0, 'forms': [], 'context_verified': False,
                     'level_candidates': sorted({x['level'] for x in candidates}),
@@ -137,6 +142,7 @@ def analyze_text(text: str) -> dict:
                 item['pos'] = ' / '.join(sorted({x['pos'] for x in item['source_candidates']}))
                 item['notes'] += ' 其他出现位置的来源候选：' + '; '.join(
                     f"{x['pos']} · {x['level']}" + (f" · {x['notes']}" if x['notes'] else '') for x in added)
+                item.update(annotation_fields(lemma, item['source_candidates']))
             start = tokens[index].start()
             surface = text[start:span_end]
             item['count'] += 1
@@ -148,4 +154,4 @@ def analyze_text(text: str) -> dict:
     return {'text': text, 'items': list(groups.values()), 'occurrences': occurrences,
             'warnings': [
                 '等级来自 Octanove 开放词表，非官方认证；词性、义项和语境仍需核对。词表覆盖有限，未标记的词不代表低于 C1。',
-                '离线中文释义和例句是通用学习注释，尚非针对每次出现的上下文释义。'], 'ai_used': False}
+                '英文释义及用例来自 Wordset，可能是完整句子或短语；没有用例时留空。两库义项尚未逐一对应，中文为独立学习注释。'], 'ai_used': False}

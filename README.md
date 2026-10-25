@@ -4,7 +4,9 @@
 
 原始项目需求的完整中文翻译见 [需求说明](docs/需求说明.zh-CN.md)。
 
-想下载本地英汉字典与 C1/C2 资料，请先看[本地词典下载指南](docs/本地词典下载指南.zh-CN.md)。新增的 `download-dictionaries.command` 可以在 Mac 上下载固定版本资料，并生成带来源说明的双语 C1/C2 学习表；目前尚未自动接入网站分析流程。
+项目已附带可以离线使用的 **Octanove × Wordset 个人词典**：Octanove 负责 C1/C2 等级，Wordset 负责英文释义和原始用例。启动后打开“我的词典”，即可查词、查看来源及下载完整 JSON；无需先下载其他字典或运行构建工具。词典使用方式及可选重建步骤见[本地词典指南](docs/本地词典下载指南.zh-CN.md)。
+
+只需要数据时，可下载[独立词典 ZIP](downloads/LexiScope-personal-dictionary.zip)，包含 JSON、校验值、原始等级表、来源和完整许可；网站程序需下载完整项目。
 
 ## 词汇等级代表什么
 
@@ -14,7 +16,11 @@
 
 多词性或多等级词条会保留 `source_candidates` 和 `level_candidates`，例如 `brief` 的动词 C1 与法律名词 C2 在离线模式下仍是待消歧候选。AI 可以根据判断的词性选择已有来源记录的等级，不能凭空生成“来源支持”的新等级；词性不匹配或义项不符时，仍保留不确定性或降为估计。即使提供了 AI 注释，当前实现也不将语境标为已经人工核实。
 
-离线模式不需要 API 密钥。它可以进行词汇匹配、高亮、词形归并和导出；部分常用词提供人工编写的中文释义、英文释义和例句。没有适合的离线注释时会提示需要结合上下文确认，而不会编造已核实的含义。开启 AI 后，后端可调用兼容的语言模型 API 辅助生成上下文注释。AI 输出仍可能出错，适合学习辅助，不适合作为考试分级或语言测评的唯一依据。
+离线模式不需要 API 密钥。它可以进行词汇匹配、高亮、词形归并、查词和导出。个人词典包含 1,955 个原始词头，其中 1,844 个有 Wordset 英文义项，1,060 个至少有一条 Wordset 原始用例；用例可能是完整句子，也可能是短语。缺少释义或用例时保留空白，不拿上传文章中的句子或新编句子冒充词典原例。
+
+等级只来自 Octanove。Wordset 的多个义项与等级记录分别保存；拼写、词性相同，也不代表这些义项全部属于同一等级，仍需结合上下文核对。资料、精确覆盖数量和再利用要求见 [data/PERSONAL_DICTIONARY.md](data/PERSONAL_DICTIONARY.md)。组合数据保留两份来源的 CC BY-SA 4.0 署名与共享要求，并保留 Wordset 继承的 Princeton WordNet 许可及免责声明。
+
+这两个来源不提供中文翻译。应用另有 17 个词头的人工中文学习注释；可选 AI 可生成上下文中文解释，并分别标注来源。AI 释义和 AI 生成例句与原词典字段分开，不改写 Wordset 原始义项或用例，也不会写回词典文件。AI 输出仍可能出错，适合学习辅助，不适合作为考试分级或语言测评的唯一依据。
 
 ## 安装和启动
 
@@ -29,7 +35,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 Windows PowerShell 激活虚拟环境的命令为 `.venv\Scripts\Activate.ps1`。启动后，在本地浏览器打开 `http://127.0.0.1:8000`。云环境使用已配置的访问方式；本项目的安装和健康检查不依赖公开网页预览。
 
-`requirements.lock` 固定本次验证使用的完整依赖版本，`requirements.txt` 列出直接依赖。当前云环境已在 `/workspace/.venvs/lexiscope` 准备独立虚拟环境，可用 `source /workspace/.venvs/lexiscope/bin/activate` 激活；未来任务使用现有隔离的检出目录，无需另建 Git worktree。
+`requirements.lock` 固定本次验证使用的完整依赖版本，`requirements.txt` 列出直接依赖。Mac 用户也可以在终端运行项目中的 `run-mac.command`。这些地址用于你已启动服务器的本机浏览器；云机器的内部端口不会自动成为可访问的公网预览链接。
 
 检查后端是否可用：
 
@@ -38,6 +44,20 @@ curl --fail http://127.0.0.1:8000/api/health
 ```
 
 默认不启动任何外部服务。API 密钥未配置时，使用词库模式即可完成基本工作流。
+
+## 使用与重建“我的词典”
+
+启动网站后，点击“我的词典”，输入词条原形，例如 `meticulous`、`cast` 或 `bona fide`。页面会分别展示等级记录、Wordset 义项、原始用例及来源；没有用例时明确显示缺失。点击“下载我的词典 JSON”即可保存本地完整文件。词典也已保存在项目的 `data/lexiscope_dictionary.json`，断网时仍可使用。
+
+只有希望从固定原始资料重新生成词典时，才需要运行：
+
+```bash
+python tools/build_personal_dictionary.py
+```
+
+Mac 可选入口是 `bash download-dictionaries.command`，使用 Python 3.12 或更新版本。它会校验已附带的 Octanove 原表，并在需要时下载约 17 MB 的固定版本 Wordset ZIP，然后生成 JSON、校验值及许可文件。它不会下载 ECDICT。已有固定版本归档可通过 `--wordset-archive /path/to/wordset.zip` 复用；无需联网的日常使用不必重建。重建会更新词典输出文件，编辑过的个人数据应先自行备份。详细参数、来源和许可见[个人词典说明](data/PERSONAL_DICTIONARY.md)。
+
+`tools/download_dictionaries.py` 保留为**可选的旧版 ECDICT 英汉学习表工具**，其结果未接入当前个人词典；正常安装和使用不需要运行它。
 
 ## 配置 AI 注释
 
@@ -54,6 +74,8 @@ curl --fail http://127.0.0.1:8000/api/health
 用户在界面中明确开启 AI 后，待分析文本才会发送到配置的模型服务。不要对无法向该服务披露的敏感文档启用 AI。密钥存在不代表服务一定可访问，实际调用仍可能受模型权限、配额或网络策略影响。没有真实凭据时，自动化测试使用模拟响应，不等同于验证真实提供商可用。
 
 AI 单次最多处理 16,000 个字符和 80 处已匹配词汇，最多补充 25 个新词或短语估计。超过处理限制或服务调用失败时返回离线结果及提示。当前环境未配置真实 API 密钥，尚未验证实际提供商调用；离线流程不受此限制影响。
+
+默认只使用 Octanove 等级，不添加模型估计词汇。AI 可解释已匹配词的上下文；只有用户另行勾选“包含等级估计”后，才允许显示额外的模型等级候选，并始终明确标为估计。
 
 ## 文档处理与导出
 
@@ -96,6 +118,9 @@ FastAPI：校验和限制 → 文本提取 → 词形/短语匹配 → 上下文
 | 接口 | 用途 |
 | --- | --- |
 | `GET /api/health` | 健康状态、AI 配置和 OCR 能力 |
+| `GET /api/dictionary` | 个人词典覆盖数量和来源元数据 |
+| `GET /api/dictionary/lookup?word=meticulous` | 查看一个词头的等级、义项及原始用例 |
+| `GET /api/dictionary/download` | 下载已附带的完整个人词典 JSON |
 | `POST /api/analyze` | 接收 `text`、`use_ai`、`include_estimates`，返回词汇、出现位置和提示 |
 | `POST /api/documents` | 接收 multipart 文件及 `ocr` 选项，返回提取文本和提示 |
 | `POST /api/export/docx` | 从分析结果生成 DOCX |
@@ -107,7 +132,7 @@ FastAPI：校验和限制 → 文本提取 → 词形/短语匹配 → 上下文
 ```bash
 curl --fail http://127.0.0.1:8000/api/analyze \
   -H 'Content-Type: application/json' \
-  -d '{"text":"The meticulous researcher alleviated pressure and remained resilient.","use_ai":false,"include_estimates":true}'
+  -d '{"text":"The meticulous researcher alleviated pressure and remained resilient.","use_ai":false,"include_estimates":false}'
 ```
 
 ## 测试

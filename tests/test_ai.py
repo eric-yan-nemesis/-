@@ -244,4 +244,20 @@ def test_same_chinese_label_with_different_english_senses_does_not_merge():
     result = ai.apply_annotations(original, {'annotations': annotations}, False)
     cast = [item for item in result['items'] if item['lemma'] == 'cast']
     assert len(cast) == 2
-    assert {item['definition'] for item in cast} == {'To select performers.', 'To suggest doubt.'}
+    assert {item['ai_definition'] for item in cast} == {'To select performers.', 'To suggest doubt.'}
+
+
+def test_ai_annotations_cannot_replace_original_wordset_definitions_or_examples():
+    original = analyze_text('Meticulous records.')
+    before = original['items'][0]
+    value = annotation(definition='A new contextual model definition.',
+                       example='A newly generated model example.',
+                       dictionary_senses=[], example_source={'name': 'Forged dictionary source'})
+    result = ai.apply_annotations(original, {'annotations': [value]}, False)
+    item = result['items'][0]
+    assert item['ai_definition'] == 'A new contextual model definition.'
+    assert item['ai_example'] == 'A newly generated model example.'
+    assert item['chinese'] == '细致的'
+    for key in ('definition', 'example', 'dictionary_senses', 'definition_source', 'example_source'):
+        assert item[key] == before[key]
+    assert item['example_source']['name'] == 'Wordset Dictionary'
