@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="发现英文阅读中的 C1、C2 词汇，理解语境，整理属于自己的词汇笔记。">
+  <meta name="theme-color" content="#f7f7f2">
+  <title>词境 · LexiScope — 让阅读更有深度</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="词境 LexiScope 首页"><span class="brand-icon" aria-hidden="true">词<span>◦</span></span><span>词境 <span class="brand-latin">LexiScope</span></span></a>
+    <nav aria-label="主导航"><a class="nav-active" href="#workspace">阅读工作台</a><a href="#vocabulary">词汇笔记</a><button id="about-button" class="text-button" type="button">关于词汇等级 <span aria-hidden="true">↗</span></button></nav>
+    <span class="local-badge"><i></i> 文档仅在本次请求中处理</span>
+  </header>
+  <main>
+    <section class="hero" aria-labelledby="page-heading">
+      <div><p class="eyebrow"><span></span> A LITTLE DEEPER, EVERY TIME</p><h1 id="page-heading">读懂原文，也读懂<span class="serif">言外之意。</span></h1><p class="hero-description">发现阅读中的 C1 / C2 词汇，在语境中理解，在下一次表达中运用。</p></div>
+      <div class="hero-note"><span aria-hidden="true">✳</span><p>不止于查词<br><strong>让每一段阅读，都有收获。</strong></p></div>
+    </section>
+
+    <section id="workspace" class="workspace" aria-label="词汇分析工作台">
+      <article class="panel input-panel">
+        <div class="panel-heading"><div class="section-label"><span class="step">01</span><h2>放入你的阅读材料</h2></div><span class="small-label">YOUR TEXT</span></div>
+        <div class="input-tabs" role="tablist" aria-label="材料类型"><button id="text-tab" type="button" role="tab" aria-selected="true" aria-controls="text-input-panel" class="tab active"><span aria-hidden="true">Aa</span> 粘贴文本</button><button id="file-tab" type="button" role="tab" aria-selected="false" aria-controls="file-input-panel" class="tab"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 2h6l4 4v12H4V2h2Zm6 0v5h4M7 11h6m-6 3h6"/></svg> 上传文档</button></div>
+        <div id="file-input-panel" class="upload-panel" role="tabpanel" aria-labelledby="file-tab" hidden><label for="file-input" class="dropzone" id="dropzone"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 22V5m-6 6 6-6 6 6M6 21v6h20v-6"/></svg><strong>点击选择，或将文档拖到这里</strong><span>支持 DOCX、PDF · 最大 10 MB</span><input id="file-input" type="file" accept=".docx,.pdf" class="visually-hidden"></label><label class="checkbox-label ocr-label"><input id="ocr-toggle" type="checkbox"> 对扫描版 PDF 启用 OCR <span class="muted" id="ocr-status">（需要 Tesseract）</span></label><p id="file-status" class="file-status" role="status"></p></div>
+        <div id="text-input-panel" class="text-panel" role="tabpanel" aria-labelledby="text-tab"><div class="editor-toolbar"><span id="editor-label">英文原文</span><div><button id="sample-button" type="button" class="text-button">试试示例 <span aria-hidden="true">↗</span></button><span class="toolbar-divider"></span><button id="clear-button" class="text-button muted" type="button">清空</button></div></div><label for="text-input" class="visually-hidden">输入或粘贴英文原文</label><textarea id="text-input" spellcheck="false" maxlength="100000" placeholder="在这里粘贴一段英文，开始一次更深入的阅读……&#10;&#10;可以是正在读的文章、论文，或你想认真理解的段落。"></textarea><div class="editor-footer"><span><span id="word-count">0</span> words <span class="count-divider">/</span> <span id="character-count">0</span> characters</span><span>⌘ / Ctrl + Enter 分析</span></div></div>
+        <div class="analysis-options"><label class="checkbox-label"><input id="estimate-toggle" type="checkbox" checked> 包含等级估计 <span class="info-dot" title="未获参考来源验证的词汇将明确标记为估计；关闭后仅展示有来源支持的结果。">i</span></label><label class="checkbox-label"><input id="ai-toggle" type="checkbox"> AI 语境释义 <span id="ai-status" class="option-tag">检查中</span></label></div>
+        <p id="ai-disclosure" class="ai-disclosure" hidden>开启后，原文将发送至后端配置的 AI 服务。请勿提交敏感内容。</p>
+        <button id="analyze-button" class="primary-button" type="button"><span class="button-icon" aria-hidden="true">✦</span><span id="analyze-button-label">发现进阶词汇</span><span class="button-arrow" aria-hidden="true">→</span></button>
+        <p class="privacy-note"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1 5 2v4c0 4-5 7-5 7s-5-3-5-7V3l5-2Z"/><path d="m5.5 7.5 1.5 1.5 3-3"/></svg>无需注册 · 默认本地规则分析 · 不主动保存原文</p>
+      </article>
+
+      <article class="panel results-panel">
+        <div class="panel-heading"><div class="section-label"><span class="step">02</span><h2>从语境中发现词汇</h2></div><span id="result-status" class="small-label">READY TO EXPLORE</span></div>
+        <div class="results-summary"><div><span class="summary-dot c1-dot"></span><span class="summary-level">C1</span><strong id="c1-count">—</strong><span class="summary-caption">进阶词汇</span></div><span class="summary-separator"></span><div><span class="summary-dot c2-dot"></span><span class="summary-level">C2</span><strong id="c2-count">—</strong><span class="summary-caption">精通词汇</span></div><span class="summary-total" id="occurrence-count">等待分析</span></div>
+        <div class="preview-heading"><span>原文高亮</span><span class="legend"><span><i class="legend-c1"></i>C1</span><span><i class="legend-c2"></i>C2</span><span><i class="legend-estimate"></i>虚线为待核</span></span></div>
+        <div id="preview-empty" class="empty-state"><div class="empty-illustration" aria-hidden="true"><div class="paper paper-back"></div><div class="paper paper-front"><span></span><span></span><span class="paper-highlight"></span><span></span><span></span></div><span class="illustration-spark">✦</span></div><h3>好的阅读，从一个词开始。</h3><p>放入一段英文，发现值得停下来理解的词汇。<br>点击高亮，查看释义与词汇笔记。</p><span class="empty-pill">READ · NOTICE · UNDERSTAND</span></div>
+        <div id="highlighted-text" class="highlighted-text" tabindex="0" aria-label="带有词汇高亮的原文" hidden></div>
+        <div id="selected-word" class="selected-word" hidden aria-live="polite"></div>
+        <div class="source-note"><span aria-hidden="true">ⓘ</span><p>参考词表覆盖有限。<strong>有词表来源不代表语境已确认</strong>，虚线标记估计或语境待核；未识别的词也不代表低于 C1。</p></div>
+      </article>
+    </section>
+
+    <div id="message" class="message" role="status" hidden></div>
+    <div id="warnings" class="warnings" aria-live="polite" hidden></div>
+
+    <section id="vocabulary" class="vocabulary-section" aria-labelledby="vocabulary-heading">
+      <div class="vocabulary-header"><div><p class="eyebrow">MAKE IT YOURS</p><h2 id="vocabulary-heading">这一次，带走这些词。 <span id="vocabulary-count">0</span></h2><p>结合上下文的释义、词汇等级与例句，整理成你的阅读笔记。</p></div><div class="export-actions"><button class="secondary-button export-button" data-format="docx" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8m-3-3 3 3 3-3M3 11v3h10v-3"/></svg>注释 DOCX</button><button class="secondary-button export-button" data-format="pdf" disabled>注释 PDF</button><button class="secondary-button export-button" data-format="csv" disabled>词汇 CSV <span aria-hidden="true">↗</span></button></div></div>
+      <div class="vocabulary-card"><div class="table-toolbar"><div class="filter-tabs" role="group" aria-label="词汇等级筛选"><button class="filter-button active" data-filter="all" type="button" aria-pressed="true">全部词汇</button><button class="filter-button" data-filter="C1" type="button" aria-pressed="false">C1</button><button class="filter-button" data-filter="C2" type="button" aria-pressed="false">C2</button><button class="filter-button" data-filter="reference" type="button" aria-pressed="false">有来源支持</button></div><label class="search-field"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="search-input" type="search" placeholder="查找词汇或中文释义" aria-label="查找词汇或中文释义"></label></div><div class="table-scroll"><table><thead><tr><th scope="col">词汇 / 词性</th><th scope="col">等级与依据</th><th scope="col">中文释义 / 英文定义</th><th scope="col">例句与语境</th><th scope="col">出现次数</th></tr></thead><tbody id="vocabulary-body"></tbody></table></div><div id="table-empty" class="table-empty"><span aria-hidden="true">⌁</span><p>你的词汇笔记，将从这里开始。</p><span>完成一次分析后，词汇会自动整理在这里。</span></div><div class="table-footer"><span id="table-count">尚无词汇</span><span>同一词汇按词义归并，保留每次出现的位置。</span></div></div>
+    </section>
+    <footer class="site-footer"><a class="footer-brand" href="#">词境 <span>LexiScope</span></a><span>每读深一点，世界就宽一点。</span><span>CEFR C1 / C2 READING COMPANION</span></footer>
+  </main>
+  <dialog id="about-dialog"><button id="close-dialog" class="dialog-close" type="button" aria-label="关闭">×</button><p class="eyebrow">A NOTE ON ACCURACY</p><h2>关于词汇等级与来源</h2><p>CEFR 描述语言能力，并不是对每个英文单词的统一评级。词汇等级可能因词义、词性与使用语境而改变。</p><p><strong>有来源支持</strong>：参考词表提供可查阅的来源和等级。它支持词条级别的分类，不代表当前词性、词义已获词典认证；虚线表示语境仍需核对。</p><p><strong>估计</strong>：内置起始词库或 AI 的建议，未经授权参考数据验证。它们用于辅助学习，不能作为权威评级。</p><p>参考词表覆盖有限，系统不会声称找出了所有 C1 / C2 词汇。AI 可辅助解读语境，但不会把未经参考验证的词汇变成权威评级。</p><p>上传文件仅为提取文本而处理。导出会重新排版原文和词汇表，不保证还原源文件的页面布局。</p><button id="acknowledge-dialog" class="primary-button" type="button">了解，继续阅读 <span aria-hidden="true">→</span></button></dialog>
+</body>
+</html>

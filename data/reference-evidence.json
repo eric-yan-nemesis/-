@@ -1,0 +1,170 @@
+{
+  "source": "Octanove Vocabulary Profile C1/C2 v1.0, Octanove Labs, via Open Language Profiles",
+  "commit": "d4e45b75b38f27b30dfc5c44d8c571aec7e7092f",
+  "source_url": "https://raw.githubusercontent.com/openlanguageprofiles/olp-en-cefrj/d4e45b75b38f27b30dfc5c44d8c571aec7e7092f/octanove-vocabulary-profile-c1c2-1.0.csv",
+  "license": "CC-BY-SA-4.0",
+  "source_sha256": "18c33a407f2f89f7b8de9671c6d45fe3ea0bce45e7d2d7dcaab48d73e0f7b380",
+  "raw_rows": 2136,
+  "rows_by_level": {
+    "C1": 1111,
+    "C2": 1025
+  },
+  "unique_headwords": 1955,
+  "unique_headword_pos_pairs": 2076,
+  "unique_exact_rows": 2108,
+  "rows_with_notes": 45,
+  "pos_counts": {
+    "noun": 834,
+    "adjective": 561,
+    "adverb": 273,
+    "verb": 460,
+    "preposition": 5,
+    "": 1,
+    "conjunction": 1,
+    "vern": 1
+  },
+  "sample_rows": [
+    {
+      "headword": "concur",
+      "pos": "verb",
+      "CEFR": "C1",
+      "notes": ""
+    },
+    {
+      "headword": "alleviate",
+      "pos": "verb",
+      "CEFR": "C1",
+      "notes": ""
+    },
+    {
+      "headword": "candid",
+      "pos": "adjective",
+      "CEFR": "C1",
+      "notes": ""
+    },
+    {
+      "headword": "resilient",
+      "pos": "adjective",
+      "CEFR": "C1",
+      "notes": ""
+    },
+    {
+      "headword": "cast",
+      "pos": "noun",
+      "CEFR": "C1",
+      "notes": "plaster cast, mold"
+    },
+    {
+      "headword": "exude",
+      "pos": "verb",
+      "CEFR": "C2",
+      "notes": ""
+    },
+    {
+      "headword": "pervasive",
+      "pos": "adjective",
+      "CEFR": "C2",
+      "notes": ""
+    },
+    {
+      "headword": "ephemeral",
+      "pos": "adjective",
+      "CEFR": "C2",
+      "notes": ""
+    },
+    {
+      "headword": "meticulous",
+      "pos": "adjective",
+      "CEFR": "C2",
+      "notes": ""
+    },
+    {
+      "headword": "brief",
+      "pos": "noun",
+      "CEFR": "C2",
+      "notes": "legal term"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "headword": "ubiquitous",
+      "octanove_c1c2_matches": [],
+      "cefrj_a1b2_matches": []
+    },
+    {
+      "headword": "substantial",
+      "octanove_c1c2_matches": [],
+      "cefrj_a1b2_matches": [
+        {
+          "headword": "substantial",
+          "pos": "adjective",
+          "CEFR": "B1",
+          "CoreInventory 1": "",
+          "CoreInventory 2": "",
+          "Threshold": ""
+        }
+      ]
+    },
+    {
+      "headword": "ambiguous",
+      "octanove_c1c2_matches": [],
+      "cefrj_a1b2_matches": [
+        {
+          "headword": "ambiguous",
+          "pos": "adjective",
+          "CEFR": "B2",
+          "CoreInventory 1": "",
+          "CoreInventory 2": "",
+          "Threshold": ""
+        }
+      ]
+    },
+    {
+      "headword": "facilitate",
+      "octanove_c1c2_matches": [],
+      "cefrj_a1b2_matches": [
+        {
+          "headword": "facilitate",
+          "pos": "verb",
+          "CEFR": "B2",
+          "CoreInventory 1": "",
+          "CoreInventory 2": "",
+          "Threshold": ""
+        }
+      ]
+    },
+    {
+      "headword": "assess",
+      "octanove_c1c2_matches": [],
+      "cefrj_a1b2_matches": [
+        {
+          "headword": "assess",
+          "pos": "verb",
+          "CEFR": "B2",
+          "CoreInventory 1": "",
+          "CoreInventory 2": "",
+          "Threshold": ""
+        }
+      ]
+    },
+    {
+      "headword": "nuance",
+      "octanove_c1c2_matches": [],
+      "cefrj_a1b2_matches": []
+    },
+    {
+      "headword": "carry out",
+      "octanove_c1c2_matches": [],
+      "cefrj_a1b2_matches": []
+    }
+  ],
+  "lower_level_evidence": {
+    "title": "The CEFR-J Wordlist Version 1.5. Compiled by Yukio Tono, Tokyo University of Foreign Studies.",
+    "source_url": "https://raw.githubusercontent.com/openlanguageprofiles/olp-en-cefrj/d4e45b75b38f27b30dfc5c44d8c571aec7e7092f/cefrj-vocabulary-profile-1.5.csv",
+    "retrieved_for_limited_lookup_only": true,
+    "sha256": "b0dd3c635f1c9a4fdf1490c7e5b7c48e8bbe55b652ad0c9860a95f98e10ae498",
+    "bundled_full_dataset": false,
+    "terms": "Research and commercial use at no charge with proper citation; copyright Tono Laboratory, TUFS. See upstream README. No express redistribution statement, so the full A1-B2 source is not bundled."
+  },
+  "interpretation": "These are source profile labels for headword/POS entries with occasional notes, not official Cambridge classifications or a guarantee about any occurrence in arbitrary text. Missing headwords are unclassified by these lookups, not automatically below C1 or above C2. Preserve uncertainty where POS or sense is ambiguous."
+}
