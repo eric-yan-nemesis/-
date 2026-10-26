@@ -2,7 +2,12 @@
 
 const $ = (id) => document.getElementById(id);
 const sampleText = "Meticulous researchers scrutinized the pervasive problem. Their candid report revealed the inherent complexity.\n\nA plausible plan could alleviate the detrimental effects and help resilient communities. The committee concurred, although its enthusiasm was ephemeral. Further scrutiny could alleviate the risks.";
-const state = { analysis: null, filter: "all", selected: null, busy: false, stale: false, aiConfigured: false };
+const state = { analysis: null, filter: "all", selected: null, busy: false, stale: false, aiConfigured: false, inputMode: "text", readingText: "", translationText: "", translating: false, translationToken: 0, translationController: null, speaking: false, paused: false, speechSession: 0, utterance: null };
+const speechEngine = window.speechSynthesis;
+
+function activeText() {
+  return state.inputMode === "file" ? $("document-text").value : $("text-input").value;
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -23,12 +28,15 @@ function warnings(items = []) {
 }
 
 function updateCounts() {
-  const text = $("text-input").value;
+  const text = activeText();
+  if (state.readingText !== text) invalidateReading(text);
   $("word-count").textContent = (text.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) || []).length.toLocaleString();
   $("character-count").textContent = Array.from(text).length.toLocaleString();
+  $("document-stats").textContent = `${Array.from(text).length.toLocaleString()} 字符`;
   state.stale = Boolean(state.analysis && state.analysis.text !== text);
   if (state.analysis) $("result-status").textContent = state.stale ? "TEXT CHANGED · REANALYZE" : (state.analysis.ai_used ? "CONTEXT ENRICHED" : "READING NOTES READY");
   document.querySelectorAll(".export-button").forEach((button) => { button.disabled = state.busy || !state.analysis || state.stale; });
+  updateReadingControls();
 }
 
 function updateBusy(busy, label = "正在理解你的文本…") {
@@ -36,10 +44,11 @@ function updateBusy(busy, label = "正在理解你的文本…") {
   $("analyze-button").disabled = busy;
   $("analyze-button").classList.toggle("is-loading", busy);
   $("analyze-button-label").textContent = busy ? label : "发现进阶词汇";
-  ["sample-button", "clear-button", "file-input", "text-input", "estimate-toggle", "text-tab", "file-tab"].forEach((id) => { $(id).disabled = busy; });
+  ["sample-button", "clear-button", "file-input", "text-input", "document-text", "estimate-toggle", "text-tab", "file-tab"].forEach((id) => { $(id).disabled = busy; });
   $("ai-toggle").disabled = busy || !state.aiConfigured;
   document.querySelectorAll(".export-button").forEach((button) => { button.disabled = busy || !state.analysis || state.stale; });
   $("workspace").setAttribute("aria-busy", String(busy));
+  updateReadingControls();
 }
 
 async function request(url, options) {
@@ -231,8 +240,8 @@ function renderAnalysis() {
 
 async function analyze() {
   if (state.busy) return;
-  const text = $("text-input").value;
-  if (!text.trim()) { message("先粘贴一段英文，或上传一份文档。", true); $("text-input").focus(); return; }
+  const text = activeText();
+  if (!text.trim()) { message(state.inputMode === "file" ? "先选择一份 DOCX 或 PDF 文档。" : "先粘贴一段英文。", true); $(state.inputMode === "file" ? "file-input" : "text-input").focus(); return; }
   if (Array.from(text).length > 100000) { message("文本过长，请将内容控制在 100,000 个字符以内。", true); return; }
   message("");
   updateBusy(true);
@@ -246,13 +255,14 @@ async function analyze() {
 
 function switchTab(tab) {
   const upload = tab === "file";
+  state.inputMode = upload ? "file" : "text";
   $("text-tab").classList.toggle("active", !upload);
   $("file-tab").classList.toggle("active", upload);
   $("text-tab").setAttribute("aria-selected", String(!upload));
   $("file-tab").setAttribute("aria-selected", String(upload));
   $("file-input-panel").hidden = !upload;
-  // Extracted text remains editable in document mode.
-  $("text-input-panel").hidden = false;
+  $("text-input-panel").hidden = upload;
+  updateCounts();
 }
 
 async function uploadFile(file) {
@@ -270,11 +280,12 @@ async function uploadFile(file) {
   try {
     const response = await request("/api/documents", { method: "POST", body: data });
     const result = await response.json();
-    $("text-input").value = result.text;
+    $("document-text").value = result.text;
+    $("document-preview").hidden = !result.text;
+    $("document-preview").open = false;
     updateCounts();
-    $("file-status").textContent = `已读取 ${file.name} · 请检查提取结果，然后开始分析。`;
+    $("file-status").textContent = `已读取 ${file.name} · 可直接分析，或展开下方校正提取文本。`;
     warnings(result.warnings || []);
-    $("text-input").focus();
   } catch (error) { $("file-status").textContent = ""; message(error.message || "文档读取失败。", true); }
   finally { updateBusy(false); $("file-input").value = ""; }
 }
@@ -300,6 +311,7 @@ async function exportFile(format) {
 }
 
 $("text-input").addEventListener("input", updateCounts);
+$("document-text").addEventListener("input", updateCounts);
 $("sample-button").addEventListener("click", () => { $("text-input").value = sampleText; updateCounts(); $("text-input").focus(); message(""); });
 $("clear-button").addEventListener("click", () => { $("text-input").value = ""; updateCounts(); $("text-input").focus(); });
 $("analyze-button").addEventListener("click", analyze);
@@ -329,6 +341,8 @@ async function initialize() {
     $("ai-status").textContent = state.aiConfigured ? "已配置" : "未配置";
     $("ai-status").title = state.aiConfigured ? "启用后原文将发送至配置的 AI 服务。" : "在服务器设置 AI_API_KEY 等配置后可使用；基础分析无需密钥。";
     $("ocr-status").textContent = health.ocr_available ? "（可用）" : "（服务器尚未启用）";
+    $("translation-disclosure").textContent = state.aiConfigured ? "点击翻译会将当前原文发送到后端配置的 AI 服务；译文仅供学习，请结合原文核对。" : "全文翻译需在后端安全配置 AI_API_KEY；词汇分析和浏览器／系统朗读无需密钥。";
+    updateReadingControls();
   } catch (_) {
     $("ai-toggle").disabled = true;
     $("ai-status").textContent = "服务未连接";
@@ -372,5 +386,164 @@ $("dictionary-form").addEventListener("submit", async (event) => {
   finally { $("dictionary-search").disabled = false; }
 });
 
+function updateReadingControls() {
+  const hasText = Boolean(activeText().trim());
+  $("translate-button").disabled = !hasText || !state.aiConfigured || state.translating || state.busy;
+  $("translate-button").textContent = state.translating ? "正在分段翻译…" : "翻译成中文";
+  $("translated-speech-option").disabled = !state.translationText;
+  const supported = Boolean(speechEngine && window.SpeechSynthesisUtterance);
+  const speakText = $("speech-source").value === "translation" ? state.translationText : activeText();
+  $("speech-start").disabled = !supported || !speakText.trim() || state.speaking || state.busy;
+  $("speech-pause").disabled = !state.speaking;
+  $("speech-pause").textContent = state.paused ? "继续" : "暂停";
+  $("speech-stop").disabled = !state.speaking;
+  ["speech-source", "speech-voice", "speech-rate"].forEach((id) => { $(id).disabled = state.speaking || !supported; });
+  if (!supported) $("speech-status").textContent = "当前浏览器不支持系统朗读，请使用新版 Safari 或 Chrome。";
+}
+
+function stopSpeech(showStatus = true) {
+  state.speechSession += 1;
+  const wasSpeaking = state.speaking;
+  state.speaking = false;
+  state.paused = false;
+  state.utterance = null;
+  if (speechEngine && wasSpeaking) speechEngine.cancel();
+  if (showStatus && wasSpeaking) $("speech-status").textContent = "朗读已停止。";
+  updateReadingControls();
+}
+
+function invalidateReading(text) {
+  state.readingText = text;
+  state.translationToken += 1;
+  if (state.translationController) state.translationController.abort();
+  state.translationController = null;
+  state.translating = false;
+  state.translationText = "";
+  $("translation-output").textContent = "";
+  $("translation-panel").hidden = true;
+  $("translation-status").textContent = "";
+  $("speech-source").value = "original";
+  stopSpeech();
+  loadVoices();
+}
+
+async function translateReading() {
+  const text = activeText();
+  if (!text.trim() || state.translating || state.busy || !state.aiConfigured) return;
+  const token = ++state.translationToken;
+  const controller = new AbortController();
+  state.translationController = controller;
+  state.translating = true;
+  $("translation-status").textContent = "正在翻译当前材料，较长文档会分段处理，请稍候。";
+  updateReadingControls();
+  try {
+    const response = await request("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: controller.signal });
+    const result = await response.json();
+    if (token !== state.translationToken || text !== activeText()) return;
+    if (typeof result.translation !== "string" || !result.translation.trim()) throw new Error("没有收到有效译文，请重试。");
+    state.translationText = result.translation;
+    $("translation-output").textContent = result.translation;
+    $("translation-panel").hidden = false;
+    $("translation-status").textContent = "翻译完成。AI 译文可能有误，请结合原文核对；可选择朗读中文译文。";
+  } catch (error) {
+    if (token === state.translationToken && error.name !== "AbortError") $("translation-status").textContent = error.message || "翻译失败，请重试。";
+  } finally {
+    if (token === state.translationToken) {
+      state.translating = false;
+      state.translationController = null;
+      updateReadingControls();
+    }
+  }
+}
+
+function loadVoices() {
+  if (!speechEngine || state.speaking) return;
+  const language = $("speech-source").value === "translation" ? "zh" : "en";
+  const selected = $("speech-voice").value;
+  const voices = speechEngine.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith(language));
+  voices.sort((a, b) => Number(b.localService) - Number(a.localService));
+  const options = [element("option", "", `系统默认${language === "en" ? "英语" : "中文"}声音`)];
+  options[0].value = "";
+  for (const voice of voices) {
+    const option = element("option", "", `${voice.name} · ${voice.lang}${voice.localService ? " · 本机" : " · 可能联网"}`);
+    option.value = voice.voiceURI;
+    options.push(option);
+  }
+  $("speech-voice").replaceChildren(...options);
+  $("speech-voice").value = voices.some((voice) => voice.voiceURI === selected) ? selected : (voices.find((voice) => voice.localService)?.voiceURI || "");
+}
+
+function speechChunks(text) {
+  const chars = Array.from(text.trim());
+  const chunks = [];
+  let offset = 0;
+  while (offset < chars.length) {
+    let size = Math.min(230, chars.length - offset);
+    if (offset + size < chars.length) {
+      let boundary = -1;
+      for (let i = size - 1; i >= size / 2; i -= 1) {
+        if (/[.!?。！？\n]/u.test(chars[offset + i])) { boundary = i + 1; break; }
+      }
+      const space = chars.slice(offset, offset + size).lastIndexOf(" ");
+      if (boundary > 0) size = boundary;
+      else if (space > size / 2) size = space + 1;
+    }
+    const chunk = chars.slice(offset, offset + size).join("").trim();
+    if (chunk) chunks.push(chunk);
+    offset += size;
+  }
+  return chunks;
+}
+
+function startSpeech() {
+  if (!speechEngine || !window.SpeechSynthesisUtterance || state.speaking) return;
+  const translated = $("speech-source").value === "translation";
+  const chunks = speechChunks(translated ? state.translationText : activeText());
+  if (!chunks.length) return;
+  const session = ++state.speechSession;
+  const voice = speechEngine.getVoices().find((entry) => entry.voiceURI === $("speech-voice").value);
+  state.speaking = true;
+  state.paused = false;
+  updateReadingControls();
+  const speak = (index) => {
+    if (session !== state.speechSession) return;
+    if (index >= chunks.length) {
+      state.speaking = false;
+      state.utterance = null;
+      $("speech-status").textContent = "朗读完成。";
+      updateReadingControls();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(chunks[index]);
+    utterance.lang = translated ? "zh-CN" : "en-US";
+    if (voice) utterance.voice = voice;
+    utterance.rate = Number($("speech-rate").value);
+    utterance.onend = () => speak(index + 1);
+    utterance.onerror = () => {
+      if (session !== state.speechSession) return;
+      stopSpeech(false);
+      $("speech-status").textContent = "此声音暂时无法朗读，请换一个声音，或在系统设置中安装所需语言的语音。";
+    };
+    state.utterance = utterance;
+    $("speech-status").textContent = `正在朗读${translated ? "中文译文" : "英文原文"} · ${index + 1} / ${chunks.length}`;
+    try { speechEngine.speak(utterance); } catch (_) { utterance.onerror(); }
+  };
+  speak(0);
+}
+
+$("translate-button").addEventListener("click", translateReading);
+$("speech-start").addEventListener("click", startSpeech);
+$("speech-stop").addEventListener("click", () => stopSpeech());
+$("speech-pause").addEventListener("click", () => {
+  if (!state.speaking || !speechEngine) return;
+  state.paused = !state.paused;
+  if (state.paused) speechEngine.pause(); else speechEngine.resume();
+  $("speech-status").textContent = state.paused ? "朗读已暂停，点击继续。" : "正在继续朗读…";
+  updateReadingControls();
+});
+$("speech-source").addEventListener("change", () => { stopSpeech(); loadVoices(); updateReadingControls(); });
+if (speechEngine) speechEngine.addEventListener("voiceschanged", loadVoices);
+window.addEventListener("pagehide", () => { stopSpeech(false); if (state.translationController) state.translationController.abort(); });
+loadVoices();
 initialize();
 loadPersonalDictionary();

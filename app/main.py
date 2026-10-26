@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -216,6 +216,27 @@ async def analyze(request: AnalyzeRequest):
     if request.use_ai:
         result = await ai.enrich(result, request.include_estimates)
     return result
+
+
+class TranslateRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    text: str = Field(min_length=1, max_length=100000)
+
+    @field_validator('text')
+    @classmethod
+    def usable_text(cls, value):
+        if not value.strip() or not valid_xml_string(value):
+            raise ValueError('请输入有效的阅读材料。')
+        return value
+
+
+@app.post('/api/translate')
+async def translate(request: Request, material: TranslateRequest):
+    from app.translation import TranslationFailure, translate_material
+    try:
+        return await translate_material(material.text, request.is_disconnected)
+    except TranslationFailure as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from None
 
 
 @app.post('/api/documents')
