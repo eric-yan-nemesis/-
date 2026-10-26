@@ -100,15 +100,18 @@ class DictionarySense(BaseModel):
     definition: str = Field(max_length=8000)
     pos: str = Field(max_length=100)
     examples: list[str] = Field(default_factory=list, max_length=100)
+    synonyms: list[str] = Field(default_factory=list, max_length=100)
     source: Literal['wordset'] = 'wordset'
     wordset_word: str = Field(max_length=200)
 
     @model_validator(mode='after')
     def valid_strings(self):
-        if not all(valid_xml_string(s) for s in [self.id, self.definition, self.pos, self.wordset_word, *self.examples]):
+        if not all(valid_xml_string(s) for s in [self.id, self.definition, self.pos, self.wordset_word, *self.examples, *self.synonyms]):
             raise ValueError('词典字段包含不支持的字符。')
         if any(len(example) > 8000 for example in self.examples):
             raise ValueError('词典用例过长。')
+        if any(len(word) > 200 for word in self.synonyms):
+            raise ValueError('同义词过长。')
         return self
 
 
@@ -136,6 +139,14 @@ class VocabularyItem(BaseModel):
     ai_definition: str = Field(default='', max_length=2000)
     ai_example: str = Field(default='', max_length=2000)
     selected_sense_id: str | None = Field(default=None, max_length=200)
+    synonyms: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator('synonyms')
+    @classmethod
+    def valid_synonyms(cls, values):
+        if any(not valid_xml_string(value) or len(value) > 200 for value in values):
+            raise ValueError('同义词格式无效。')
+        return values
 
     @field_validator('lemma', 'pos', 'chinese', 'definition', 'example', 'notes', 'ai_definition', 'ai_example', 'chinese_source')
     @classmethod

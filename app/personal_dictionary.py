@@ -68,4 +68,5 @@ def annotation_fields(lemma: str, candidates: list[dict]) -> dict:
         'example_source': source if example else None,
         'annotation_source': 'wordset' if definition or example else 'none',
         'selected_sense_id': selected['id'] if selected else None,
+        'synonyms': selected.get('synonyms', []) if selected else [],
     }

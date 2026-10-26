@@ -129,15 +129,18 @@ def build(profile: Path, archive: Path) -> tuple[dict, dict]:
                         continue
                     example = meaning.get('example')
                     examples = [example] if isinstance(example, str) and example.strip() else []
+                    synonyms = list(dict.fromkeys(value.strip() for value in meaning.get('synonyms', [])
+                        if isinstance(value, str) and value.strip() and value.strip().casefold() != form))
                     sense = {
                         'id': meaning.get('id', ''),
                         'definition': definition,
                         'pos': meaning.get('speech_part', ''),
                         'examples': list(dict.fromkeys(examples)),
+                        'synonyms': synonyms,
                         'source': 'wordset',
                         'wordset_word': lexical_entry.get('word', form),
                     }
-                    key = (sense['wordset_word'], sense['id'], definition, sense['pos'], tuple(sense['examples']))
+                    key = (sense['wordset_word'], sense['id'], definition, sense['pos'], tuple(sense['examples']), tuple(synonyms))
                     if key not in sense_keys:
                         senses.append(sense)
                         sense_keys.add(key)
@@ -158,6 +161,8 @@ def build(profile: Path, archive: Path) -> tuple[dict, dict]:
         'senses': sum(len(entry['senses']) for entry in entries),
         'senses_with_examples': sum(bool(sense['examples']) for entry in entries for sense in entry['senses']),
         'examples': sum(len(sense['examples']) for entry in entries for sense in entry['senses']),
+        'headwords_with_synonyms': sum(any(sense['synonyms'] for sense in entry['senses']) for entry in entries),
+        'senses_with_synonyms': sum(bool(sense['synonyms']) for entry in entries for sense in entry['senses']),
         'duplicate_spelling_senses_removed': duplicate_senses,
         'records_by_level': {level: sum(record['level'] == level for entry in entries for record in entry['cefr']) for level in ('C1', 'C2')},
         'unmatched_headwords': [entry['word'] for entry in entries if not entry['senses']],
@@ -197,6 +202,7 @@ def build(profile: Path, archive: Path) -> tuple[dict, dict]:
             'Selected corresponding Wordset definitions and examples; original strings and source sense IDs retained.',
             'Only completely identical Wordset spelling/sense/definition/POS/example records deduplicated; spelling provenance retained.',
             'No source sense-to-CEFR mapping inferred; no translations or examples generated.',
+            'Wordset synonyms retained within their original sense; duplicates and self references removed. Synonyms have no inferred CEFR level.',
         ],
         'warnings': [
             'CEFR levels describe Octanove word/POS records, not individually verified Wordset senses or passage occurrences.',

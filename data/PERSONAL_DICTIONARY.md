@@ -26,6 +26,8 @@
 | 无 Wordset 用例的原始词头 | 895 |
 | 保留的 Wordset 义项记录 | 4,930 |
 | 有用例的义项记录 / 用例记录 | 1,838 / 1,838 |
+| 有同义词的词头 | 1,461 |
+| 有同义词的义项 | 3,195 |
 
 “用例”包括短语和完整句子，不能把 1,838 条一律称为完整例句。同一原始义项可对应不同拼写，因此记录数量也不等于不同句子的数量。全部精确计数与未命中词头见 JSON 的 `coverage`。
 
@@ -50,6 +52,7 @@
       "definition": "to provide physical relief, as from pain",
       "pos": "verb",
       "examples": ["Aspirin alleviates my headaches."],
+      "synonyms": ["relieve"],
       "source": "wordset",
       "wordset_word": "alleviate"
     }
@@ -58,6 +61,8 @@
 ```
 
 以上只展示 `alleviate` 的一个义项；完整词条包含全部命中义项。`source` 标识对应顶层 `sources` 的来源、固定版本和许可信息。该数据结构没有给 Wordset 单个义项添加 CEFR 标签，也不声称完成语境消歧。
+
+`synonyms` 保留 Wordset 在同一个义项中列出的词，去除完全重复值和自身引用；没有则为 `[]`。近义参考不表示任何语境都能直接替换，也不意味着同义词具有相同 CEFR 等级。不同义项的同义词分别保存，不跨义项拼接。
 
 ## 固定版本与校验
 

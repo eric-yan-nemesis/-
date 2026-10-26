@@ -101,7 +101,9 @@ def _basis(item: dict) -> str:
 def _definitions(item: dict) -> str:
     if "dictionary_senses" not in item or (not item.get("dictionary_senses") and not item.get("definition_source") and item.get("definition")):
         return str(item.get("definition", ""))
-    parts = [f"[{sense.get('pos', '')}] {sense.get('definition', '')}" for sense in item.get("dictionary_senses", [])]
+    parts = [f"[{sense.get('pos', '')}] {sense.get('definition', '')}" +
+             ("\n同义词参考（需核对语境）：" + " · ".join(sense['synonyms']) if sense.get('synonyms') else '')
+             for sense in item.get("dictionary_senses", [])]
     if not parts:
         parts.append("Wordset 暂无匹配义项")
     if item.get("ai_definition"):

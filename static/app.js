@@ -2,7 +2,7 @@
 
 const $ = (id) => document.getElementById(id);
 const sampleText = "Meticulous researchers scrutinized the pervasive problem. Their candid report revealed the inherent complexity.\n\nA plausible plan could alleviate the detrimental effects and help resilient communities. The committee concurred, although its enthusiasm was ephemeral. Further scrutiny could alleviate the risks.";
-const state = { analysis: null, filter: "all", selected: null, busy: false, stale: false, aiConfigured: false, inputMode: "text", readingText: "", translationText: "", translating: false, translationToken: 0, translationController: null, speaking: false, paused: false, speechSession: 0, utterance: null };
+const state = { analysis: null, filter: "all", selected: null, busy: false, stale: false, aiConfigured: false, inputMode: "text", readingText: "", translationText: "", translating: false, translationToken: 0, translationController: null, nativeTranslator: null, speaking: false, paused: false, speechSession: 0, utterance: null };
 const speechEngine = window.speechSynthesis;
 
 function activeText() {
@@ -108,6 +108,7 @@ function dictionarySenses(senses = []) {
       examples.forEach((example) => list.append(element("li", "", example)));
       details.append(list);
     } else details.append(element("p", "item-notes", "Wordset 暂无用例"));
+    details.append(element("p", "sense-synonyms", (sense.synonyms || []).length ? `同义词参考：${sense.synonyms.join(" · ")}` : "Wordset 暂无本义项同义词"));
     container.append(details);
   });
   return container;
@@ -182,7 +183,7 @@ function renderTable() {
   const query = $("search-input").value.trim().toLocaleLowerCase();
   const items = allItems.filter((item) => {
     const matchesFilter = state.filter === "all" || candidateLevels(item).includes(state.filter) || (state.filter === "reference" && item.status === "reference");
-    const matchesQuery = !query || [item.lemma, item.chinese, item.definition, ...(item.forms || [])].some((value) => String(value || "").toLocaleLowerCase().includes(query));
+    const matchesQuery = !query || [item.lemma, item.chinese, item.definition, ...(item.forms || []), ...(item.dictionary_senses || []).flatMap((sense) => sense.synonyms || [])].some((value) => String(value || "").toLocaleLowerCase().includes(query));
     return matchesFilter && matchesQuery;
   });
   const rows = items.map((item) => {
@@ -198,6 +199,7 @@ function renderTable() {
     if (contextUncertain(item)) levelCell.append(element("span", "status-badge", "语境待核"));
     const definitionCell = element("td");
     definitionCell.append(element("p", "chinese-meaning", item.chinese || "—"), element("p", "item-notes", item.chinese_source || "中文学习注释／AI 辅助"), element("p", "english-definition", item.definition || "Wordset 暂无匹配定义"));
+    if ((item.synonyms || []).length) definitionCell.append(element("p", "sense-synonyms", `同义词参考：${item.synonyms.join(" · ")}（需核对语境）`));
     const exampleCell = element("td");
     exampleCell.append(element("p", "example-sentence", item.example || "Wordset 暂无用例"));
     const exampleSource = referenceLink(item.example_source || item.definition_source, "Wordset 义项／用例 ↗");
@@ -341,7 +343,8 @@ async function initialize() {
     $("ai-status").textContent = state.aiConfigured ? "已配置" : "未配置";
     $("ai-status").title = state.aiConfigured ? "启用后原文将发送至配置的 AI 服务。" : "在服务器设置 AI_API_KEY 等配置后可使用；基础分析无需密钥。";
     $("ocr-status").textContent = health.ocr_available ? "（可用）" : "（服务器尚未启用）";
-    $("translation-disclosure").textContent = state.aiConfigured ? "点击翻译会将当前原文发送到后端配置的 AI 服务；译文仅供学习，请结合原文核对。" : "全文翻译需在后端安全配置 AI_API_KEY；词汇分析和浏览器／系统朗读无需密钥。";
+    $("translation-ai-option").disabled = !state.aiConfigured;
+    $("translation-ai-option").textContent = state.aiConfigured ? "AI 全文翻译（已配置）" : "AI 全文翻译（未配置密钥）";
     updateReadingControls();
   } catch (_) {
     $("ai-toggle").disabled = true;
@@ -358,7 +361,7 @@ async function loadPersonalDictionary() {
       headwords: "词头", unique_headwords: "词头", entries: "词条", total_entries: "词条",
       matched_wordset_headwords: "匹配 Wordset 的词头", wordset_matched_headwords: "匹配 Wordset 的词头",
       headwords_with_examples: "有用例的词头", words_with_examples: "有用例的词头",
-      senses: "英文义项", wordset_senses: "英文义项", examples: "原始用例", example_count: "原始用例"
+      senses: "英文义项", wordset_senses: "英文义项", examples: "原始用例", example_count: "原始用例", headwords_with_synonyms: "有同义词的词头"
     };
     const stats = Object.entries(data.coverage || {}).filter(([key, value]) => labels[key] && typeof value === "number");
     $("dictionary-coverage").replaceChildren(...stats.map(([key, value]) => element("span", "coverage-stat", `${labels[key]}：${value.toLocaleString()}`)));
@@ -388,8 +391,13 @@ $("dictionary-form").addEventListener("submit", async (event) => {
 
 function updateReadingControls() {
   const hasText = Boolean(activeText().trim());
-  $("translate-button").disabled = !hasText || !state.aiConfigured || state.translating || state.busy;
+  const method = $("translation-method").value;
+  $("translate-button").hidden = method === "web";
+  $("translate-button").disabled = !hasText || (method === "ai" && !state.aiConfigured) || state.translating || state.busy;
   $("translate-button").textContent = state.translating ? "正在分段翻译…" : "翻译成中文";
+  $("translation-web-panel").hidden = method !== "web";
+  $("translation-disclosure").textContent = method === "browser" ? "使用 Chrome 本机英译中，首次可能需要下载语言模型；本网站不会把原文发送给 AI 接口。不支持时可选择 Google 官方网页翻译。" : method === "web" ? "点击下方链接，在新标签页使用 Google 官方翻译，无需 API 密钥。仅把当前所选段落发送给 Google；长文请逐段翻译。" : "点击翻译会将当前原文发送到后端配置的 AI 服务；需要 AI_API_KEY。译文请结合原文核对。";
+  $("translation-web-link").hidden = !hasText;
   $("translated-speech-option").disabled = !state.translationText;
   const supported = Boolean(speechEngine && window.SpeechSynthesisUtterance);
   const speakText = $("speech-source").value === "translation" ? state.translationText : activeText();
@@ -417,11 +425,15 @@ function invalidateReading(text) {
   state.translationToken += 1;
   if (state.translationController) state.translationController.abort();
   state.translationController = null;
+  if (state.nativeTranslator) { try { state.nativeTranslator.destroy(); } catch (_) {} state.nativeTranslator = null; }
   state.translating = false;
   state.translationText = "";
   $("translation-output").textContent = "";
   $("translation-panel").hidden = true;
   $("translation-status").textContent = "";
+  $("manual-translation").value = "";
+  $("translation-segment").value = "0";
+  updateWebTranslation();
   $("speech-source").value = "original";
   stopSpeech();
   loadVoices();
@@ -429,7 +441,8 @@ function invalidateReading(text) {
 
 async function translateReading() {
   const text = activeText();
-  if (!text.trim() || state.translating || state.busy || !state.aiConfigured) return;
+  const method = $("translation-method").value;
+  if (!text.trim() || state.translating || state.busy || method === "web" || (method === "ai" && !state.aiConfigured)) return;
   const token = ++state.translationToken;
   const controller = new AbortController();
   state.translationController = controller;
@@ -437,22 +450,96 @@ async function translateReading() {
   $("translation-status").textContent = "正在翻译当前材料，较长文档会分段处理，请稍候。";
   updateReadingControls();
   try {
-    const response = await request("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: controller.signal });
-    const result = await response.json();
+    let result;
+    if (method === "browser") {
+      result = { translation: await nativeTranslation(text, token, controller.signal) };
+    } else {
+      const response = await request("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: controller.signal });
+      result = await response.json();
+    }
     if (token !== state.translationToken || text !== activeText()) return;
     if (typeof result.translation !== "string" || !result.translation.trim()) throw new Error("没有收到有效译文，请重试。");
     state.translationText = result.translation;
     $("translation-output").textContent = result.translation;
     $("translation-panel").hidden = false;
-    $("translation-status").textContent = "翻译完成。AI 译文可能有误，请结合原文核对；可选择朗读中文译文。";
+    $("translation-origin").textContent = method === "browser" ? "Chrome 本机翻译·待核对" : "AI 辅助·待核对";
+    $("translation-status").textContent = "翻译完成。自动译文可能有误，请结合原文核对；可选择朗读中文译文。";
   } catch (error) {
     if (token === state.translationToken && error.name !== "AbortError") $("translation-status").textContent = error.message || "翻译失败，请重试。";
+    if (token === state.translationToken && method === "browser" && error.name !== "AbortError") {
+      $("translation-method").value = "web";
+      $("translation-status").textContent += " 可点击下方链接改用 Google 官方翻译，无需密钥。";
+      updateWebTranslation();
+    }
   } finally {
     if (token === state.translationToken) {
       state.translating = false;
       state.translationController = null;
       updateReadingControls();
     }
+  }
+}
+
+function readingSegments(text) {
+  const chunks = [];
+  while (text.length > 1500) {
+    let end = text.lastIndexOf("\n", 1500);
+    if (end < 750) end = text.lastIndexOf(" ", 1500);
+    if (end < 750) end = 1500; else end += 1;
+    // Preserve astral characters at a hard boundary.
+    if (/[\uD800-\uDBFF]/u.test(text[end - 1])) end -= 1;
+    chunks.push(text.slice(0, end)); text = text.slice(end);
+  }
+  if (text) chunks.push(text);
+  return chunks;
+}
+
+function updateWebTranslation() {
+  const chunks = readingSegments(activeText());
+  const previous = Number($("translation-segment").value) || 0;
+  const index = Math.min(previous, Math.max(chunks.length - 1, 0));
+  $("translation-segment").replaceChildren(...chunks.map((_, i) => {
+    const option = element("option", "", `第 ${i + 1} / ${chunks.length} 段`); option.value = String(i); return option;
+  }));
+  $("translation-segment").value = String(index);
+  $("translation-segment-label").hidden = chunks.length <= 1;
+  $("translation-segment-status").textContent = chunks.length ? `当前为第 ${index + 1} / ${chunks.length} 段。${chunks.length > 1 ? "请逐段打开，未自动翻译整篇。" : "将打开这段材料的中文翻译。"}` : "请先粘贴文本或上传文档。";
+  $("translation-segment-preview").textContent = chunks[index] || "";
+  $("translation-web-link").hidden = !activeText().trim();
+  if (chunks[index]) {
+    const url = new URL("https://translate.google.com/");
+    url.search = new URLSearchParams({sl:"en",tl:"zh-CN",text:chunks[index],op:"translate"}).toString();
+    $("translation-web-link").href = url.href;
+    $("translation-web-link").textContent = chunks.length > 1 ? `打开 Google 翻译第 ${index + 1} 段 ↗` : "打开 Google 英译中 ↗";
+  } else $("translation-web-link").removeAttribute("href");
+}
+
+async function nativeTranslation(text, token, signal) {
+  if (!window.Translator) throw new Error("当前浏览器未提供本机翻译。");
+  const options = {sourceLanguage:"en",targetLanguage:"zh"};
+  const availability = await window.Translator.availability(options);
+  if (availability === "unavailable") throw new Error("当前 Chrome 暂不支持本机英译中。");
+  if (signal.aborted) throw new DOMException("已取消", "AbortError");
+  const translator = await window.Translator.create({...options,signal,monitor(monitor) {
+    monitor.addEventListener("downloadprogress", () => {
+      if (token === state.translationToken) $("translation-status").textContent = "Chrome 正在下载本机翻译语言模型，请保持页面打开…";
+    });
+  }});
+  try {
+    if (signal.aborted || token !== state.translationToken) throw new DOMException("已取消", "AbortError");
+    state.nativeTranslator = translator;
+    const chunks = readingSegments(text), output = [];
+    for (let i = 0; i < chunks.length; i += 1) {
+      if (signal.aborted || token !== state.translationToken) throw new DOMException("已取消", "AbortError");
+      $("translation-status").textContent = `正在本机翻译 · ${i + 1} / ${chunks.length}`;
+      const translated = await translator.translate(chunks[i],{signal});
+      if (typeof translated !== "string" || !translated.trim()) throw new Error("本机翻译没有返回有效内容。");
+      output.push(translated);
+    }
+    return output.join("\n\n");
+  } finally {
+    try { translator.destroy(); } catch (_) {}
+    if (state.nativeTranslator === translator) state.nativeTranslator = null;
   }
 }
 
@@ -532,6 +619,19 @@ function startSpeech() {
 }
 
 $("translate-button").addEventListener("click", translateReading);
+$("translation-method").addEventListener("change", () => { invalidateReading(activeText()); updateReadingControls(); });
+$("translation-segment").addEventListener("change", updateWebTranslation);
+$("accept-translation").addEventListener("click", () => {
+  const value = $("manual-translation").value.trim();
+  if (!activeText().trim() || !value) { $("translation-status").textContent = "请先放入原文，再粘贴中文译文。"; return; }
+  stopSpeech();
+  state.translationText = value;
+  $("translation-output").textContent = value;
+  $("translation-origin").textContent = "手动导入·请核对";
+  $("translation-panel").hidden = false;
+  $("translation-status").textContent = "已载入你粘贴的译文；是否覆盖全部原文需要自行核对。现在可以朗读中文译文。";
+  updateReadingControls();
+});
 $("speech-start").addEventListener("click", startSpeech);
 $("speech-stop").addEventListener("click", () => stopSpeech());
 $("speech-pause").addEventListener("click", () => {
@@ -544,6 +644,10 @@ $("speech-pause").addEventListener("click", () => {
 $("speech-source").addEventListener("change", () => { stopSpeech(); loadVoices(); updateReadingControls(); });
 if (speechEngine) speechEngine.addEventListener("voiceschanged", loadVoices);
 window.addEventListener("pagehide", () => { stopSpeech(false); if (state.translationController) state.translationController.abort(); });
+const nativeSupported = Boolean(window.Translator && window.Translator.create && window.Translator.availability);
+$("translation-native-option").disabled = !nativeSupported;
+if (nativeSupported) $("translation-method").value = "browser";
+updateWebTranslation();
 loadVoices();
 initialize();
 loadPersonalDictionary();
